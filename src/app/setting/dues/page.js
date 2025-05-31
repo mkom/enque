@@ -4,22 +4,18 @@ import { useRouter } from 'next/navigation';
 import { TopNavbar } from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
 import IuranSetup from "@/app/setting/components/IuranSetup";
-import MemberSetup from "@/app/setting/components/MemberSetup";
+import UnitSetup from "@/app/setting/components/UnitSetup";
 import TenantLoader from "@/components/TenantLoader";
 
-import {
-    Card,
-    CardHeader,
-    Typography,
-    CardFooter
-  } from "@material-tailwind/react";
+import {Typography} from "@material-tailwind/react";
 
 import { redirectBasedOnAuth } from "../../../utils/redirect";
 
 export default function SettingDues() {
     const router = useRouter();
     useEffect(() => {
-        redirectBasedOnAuth(router);
+        const pathname = window.location.pathname;
+        redirectBasedOnAuth(router, pathname, ['admin_tenant']);
     }, [router]);
 
     return (
@@ -34,7 +30,7 @@ export default function SettingDues() {
                 <div className="p-4 h-full">
                     <Typography variant="h4" className="mb-5">Pengaturan Iuran</Typography>
                     <IuranSetup/>
-                    <MemberSetup/>
+                    <UnitSetup/>
                 </div>
                 </main>
             </div>

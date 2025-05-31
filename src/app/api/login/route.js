@@ -12,6 +12,7 @@ export async function POST(req) {
         apiKeyMiddleware(req);
 
         const { email, password } = await req.json();
+        
         // Cek apakah email ada di database
         const tenantResult = await pool.query('SELECT * FROM tenants WHERE tenant_email = $1', [email]);
         // console.log('Email:', email);

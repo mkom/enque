@@ -81,7 +81,7 @@ export default function Login() {
     if (isValid) {
       setLoading(true)
       try {
-        const response = await fetch('/api/login', {
+        const response = await fetch('/api/login/tenant', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -95,13 +95,13 @@ export default function Login() {
   
         const data = await response.json();
         if (response.status === 200) {
-          //console.log(data)
-          Cookies.set("token.oqoe", data.token, { expires: 7, secure: true });
+         // console.log(data)
+          Cookies.set("token.app_oq", data.data, { expires: 7, secure: true });
   
           router.push('/dashboard');
           setMessage(data.message);
   
-          if (data.token) {
+          if (data.data) {
             setToken(true)
           }
   
@@ -187,6 +187,7 @@ export default function Login() {
                   }
                 />
               </div>
+
                 {message &&  !token && 
                   <Typography
                     color="red"

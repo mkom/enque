@@ -1,6 +1,7 @@
 import { pool } from '../../../lib/db';
 import jwt from 'jsonwebtoken';
 import { apiKeyMiddleware } from '../../../middleware/apiKeyMiddleware';
+import { errorResponse, successResponse } from '@/utils/apiResponse';
 
 export async function GET(req) {
     try {
@@ -8,33 +9,29 @@ export async function GET(req) {
       
       const authHeader = req.headers.get('authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return new Response(
-          JSON.stringify({
-            status: 'fail',
-            message: 'Unauthorized',
-            data: null,
-          }),
-          { status: 401 }
+        return errorResponse(
+          'Unauthorized',
+          'Authorization header missing or malformed',
+          401
         );
       }
 
       const token = authHeader.split(' ')[1];
-
       let decodedToken;
+      
       try {
         decodedToken = jwt.verify(token, process.env.JWT_SECRET);
       } catch (error) {
-        return new Response(
-          JSON.stringify({
-            status: 'fail',
-            message: 'Invalid or expired token',
-            data: null,
-          }),
-          { status: 401 }
+        return errorResponse(
+          'Unauthorized',
+          'Invalid or expired token',
+          401
         );
       }
   
       const { tenantId } = decodedToken;
+
+      //console.log("tenantId", tenantId)
 
       const query = `
         SELECT 
@@ -44,10 +41,10 @@ export async function GET(req) {
           t.unique_id,
           t.tenant_email,
           t.tenant_address,
-            COUNT(DISTINCT m.member_id)::INTEGER AS total_units,
+            COUNT(DISTINCT u.unit_id)::INTEGER AS total_units,
             COUNT(DISTINCT f.fee_id)::INTEGER AS total_fees
         FROM tenants t
-        LEFT JOIN members m ON t.tenant_id = m.tenant_id
+        LEFT JOIN units u ON t.tenant_id = u.tenant_id
         LEFT JOIN fees f ON t.tenant_id = f.tenant_id
         WHERE t.tenant_id = $1
         GROUP BY t.tenant_id, t.tenant_name
@@ -57,34 +54,25 @@ export async function GET(req) {
       const result = await pool.query(query, [tenantId]);
   
       if (result.rows.length === 0) {
-        return new Response(
-            JSON.stringify({
-                status: 'fail',
-                message: 'Tenant not found',
-                data: null,
-            }),
-            { status: 404 }
-        );
+        return errorResponse(
+          [],
+          'Tenant not found',
+          404
+        );          
       }
 
-      return new Response(
-        JSON.stringify({
-          status: 'success',
-          message: 'Tenant details retrieved successfully',
-          data: result.rows[0],
-        }),
-        { status: 200 }
+      return successResponse(
+        result.rows[0],
+        'Tenant details fetched successfully',
+        200
       );
       
     } catch (error) {
       console.error('Error fetching tenant details:', error);
-      return new Response(
-        JSON.stringify({
-            status: 'error',
-            message: 'Internal Server Error',
-            data: null,
-          }),
-        { status: 500 }
+      return errorResponse(
+        'Internal Server Error',
+        error.message,
+        500
       );
     }
 }

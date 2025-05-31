@@ -16,22 +16,32 @@ import {
   IconButton,
   Tooltip,
   Input,
+  Dialog,
+  DialogBody,
+    DialogHeader,
+    DialogFooter,
 } from "@material-tailwind/react";
 
-import { fetchTenantDetails } from "@/utils/fetchTenant";
 import { Skeleton } from "@/components/Skeleton";
 import { formatRupiah } from "@/utils/formatRupiah";
+//import PaymentForm from "./PaymentForm";
 
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
  
-const TABLE_HEAD = ["No", "ID", "Iuran", "Unit", "Jumlah", "Tanggal", "Tunai/Transfer", "Status",  ""];
+const TABLE_HEAD = ["No", "ID", "Iuran", "Keterangan", "Unit", "Jumlah", "Tanggal", "Tunai/Transfer", "Status",  ""];
  
 const ITEMS_PER_PAGE = 20;
  
-export function PaymentList() {
-    const [tenantId, setTenantId] = useState(0);
-    const [openForm, setOpenForm] = useState(false);
+export function PaymentList ({ onEdit }) {
+    //const [openForm, setOpenForm] = useState(false);
+
+    const [open, setOpen] = useState(false);
+    const [confirmationOpen, setConfirmationOpen] = useState(false);
+    const handleOpen = () => setOpen(!open);
+    const handleConfirmationOpen = () => setConfirmationOpen(!open);
+    const [trxId, setTrxId] = useState(0);
+    
     const [paymentData, setPaymentData] = useState([]);
     const [skeletonShow, setSkeletonShow] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -55,35 +65,22 @@ export function PaymentList() {
         return format(new Date(date), "dd MMM yyyy", { locale: id });
     };
 
-    useEffect(() => {
-        const getTenantData = async () => {
-            try {
-            const tenantData = await fetchTenantDetails();
-            setTenantId(tenantData.tenant_id || '0');
-            } catch (error) {
-            console.error('Failed to load tenant data:', error);
-            }
-        };
-
-        getTenantData();
-    }, []);
-    
 
     const getPaymentData =  useCallback( async () => {
-        const token = Cookies.get("token.oqoe");
+        const token = Cookies.get("token.app_oq");
         const url = `/api/fee/payment`;
         try {
             const response = await fetch(url, {
                 method: 'GET',
                 headers: {
-                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
                     'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
-                    'X-Tenant-Id': tenantId,
+                    Authorization: `Bearer ${token}`,
                 },
             });
         
             const data = await response.json();
-            //console.log(data);
+            console.log(data);
             setPaymentData(data.data || []);
             
             } catch (error) {
@@ -93,7 +90,7 @@ export function PaymentList() {
                 setSkeletonShow(false); 
             }
 
-    },[tenantId]);
+    },[]);
 
     useEffect(() => {
         getPaymentData();
@@ -105,12 +102,13 @@ export function PaymentList() {
         const query = event.target.value;
         setSearchTerm(query);
     };
+   // console.log("data", paymentData);
 
     const filteredData = paymentData.filter(data => {
-        const search = searchTerm.toLowerCase(); // Normalisasi searchTerm untuk pencarian case-insensitive
+        const search = searchTerm.toLowerCase();
         return (
-            data?.member_address?.toLowerCase().includes(search) || // Cek alamat
-            data?.fee_name?.toLowerCase().includes(search) || // Cek nama iuran
+            data?.house_number?.toLowerCase().includes(search) || 
+            data?.fee_name?.toLowerCase().includes(search) || 
             data?.unique_id?.toLowerCase().includes(search)
         );
     });
@@ -119,9 +117,50 @@ export function PaymentList() {
     const currentPageData = filteredData.slice(offset, offset + ITEMS_PER_PAGE);
     const pageCount = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
 
+    const handleEdit = (item) => {
+        onEdit(item); // buka form dan kirim data untuk edit
+    };
+
+     const handleDelete = async () => {
+        setLoading(true);
+        const token = Cookies.get("token.app_oq");
+        try {
+            const response = await fetch('/api/fee/payment', {
+                method: 'DELETE',
+                headers: {
+                'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
+                Authorization: `Bearer ${token}`,
+                },
+
+                body: JSON.stringify({
+                trxId:trxId,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.status === 200) {
+                setLoading(false);
+                getPaymentData();
+                setConfirmationOpen(false);
+            } 
+            
+        } catch (error) {
+            
+        } finally {
+            setLoading(false);
+            getPaymentData();
+            setConfirmationOpen(false);
+        }
+    };
+
     return (
         <>
-        <div className="flex items-center justify-end px-7">
+        {/* {openForm && (
+            <PaymentForm onCancel={() => setOpenForm(false)}/>
+        )} */}
+
+        <div className="flex items-center justify-end px-4">
             <div className="w-full md:w-72">
                 <Input
                 label="Cari"
@@ -130,7 +169,7 @@ export function PaymentList() {
                 />
             </div>
         </div>
-        <CardBody className="px-0 ">
+        <CardBody className="p-6 px-0 ">
             <table className="w-full min-w-max table-auto text-left">
                 <thead>
                 <tr>
@@ -172,17 +211,22 @@ export function PaymentList() {
                                 </td>
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-bold">
-                                        {data?.fee_name}
+                                        {data?.fee_name} 
                                     </Typography>
                                 </td>
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-normal">
-                                        {data?.member_address}
+                                        {data?.house_number}
                                     </Typography>
                                 </td>
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-normal">
-                                        {formatRupiah(data?.amount)}
+                                        {data?.house_number}
+                                    </Typography>
+                                </td>
+                                <td className="py-2 px-3">
+                                    <Typography variant="small" color="blue-gray" className="font-normal">
+                                        {formatRupiah(parseInt(data?.amount))}
                                     </Typography>
                                 </td>
                                 <td className="py-2 px-3">
@@ -199,32 +243,33 @@ export function PaymentList() {
                                     <Chip
                                         size="sm"
                                         variant="ghost"
+                                        className="text-center"
                                         value={
                                             data?.status === "completed"
                                             ? "Sukses"
                                             : data?.status === "failed"
                                             ? "Gagal"
-                                            : "Pending"
+                                            : "Menunggu"
                                         }
                                         color={
                                         data?.status === "completed"
                                             ? "green"
                                             : data?.status === "failed"
-                                            ? "amber"
-                                            : "red"
+                                            ? "red"
+                                            : "amber"
                                         }
                                     />
 
                                 </td>
                                 <td className="py-2 px-3 flex gap-2">
                                     <Tooltip content="Ubah">
-                                        <IconButton className="h-8" onClick={() => { handleOpen(); handleEdit(data); }} variant="text">
+                                        <IconButton className="h-8" onClick={() => { handleEdit(data); }} variant="text">
                                             <PencilIcon className="h-4 w-4" />
                                         </IconButton>
                                     </Tooltip>
 
                                     <Tooltip content="Hapus">
-                                        <IconButton className="h-8" onClick={() => { setConfirmationOpen(true); setMemberIdEdit(member?.member_id); }} variant="text">
+                                        <IconButton className="h-8" onClick={() => { setConfirmationOpen(true); setTrxId(data.transaction_id) }} variant="text">
                                             <TrashIcon className="h-4 w-4" />
                                         </IconButton>
                                     </Tooltip>
@@ -271,6 +316,33 @@ export function PaymentList() {
                 </>
             )}
         </CardFooter>
+
+        {confirmationOpen && (
+            <Dialog 
+            open={confirmationOpen} 
+            handler={handleConfirmationOpen}
+            className="p-4"
+            >
+                <DialogHeader>
+                    <Typography variant="h5" color="blue-gray">
+                        Konfirmasi Hapus
+                    </Typography>
+                </DialogHeader>
+                <DialogBody>
+                    <Typography className="font-normal  text-gray">Apakah Anda yakin ingin menghapus Transaksi ini? Tindakan ini tidak bisa dibatalkan.</Typography>
+                </DialogBody>
+                <DialogFooter className="space-x-2">
+                    <Button variant="text" color="blue-gray" onClick={() => setConfirmationOpen(false)} disabled={loading}>
+                        Batal
+                    </Button>
+                    <Button variant="gradient" onClick={handleDelete} disabled={loading}>
+                        {loading ? "Menghapus..." : "Hapus"}
+                    </Button>
+
+                </DialogFooter>
+            </Dialog>
+        )}
+
         </>
     );
 }

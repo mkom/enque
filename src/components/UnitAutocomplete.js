@@ -1,37 +1,30 @@
+// File: src/components/UnitAutocomplete.js
 import { useState, useEffect, useCallback } from "react";
 import { Input, Typography } from "@material-tailwind/react";
 import Cookies from "js-cookie";
 import { fetchTenantDetails } from "../utils/fetchTenant";
 
-export default function UnitAutocomplete({onSelect }) {
-  const [membersData, setMembersData] = useState([]);
+export default function UnitAutocomplete({onSelect,initialValue = "" }) {
+  const [unitsData, setUnitsData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedName, setSelectedName] = useState("");
+  const [searchTerm, setSearchTerm] = useState(initialValue);
+  const [selectedName, setSelectedName] = useState(initialValue);
   const [isOpen, setIsOpen] = useState(false);
 
   const [tenantId, setTenantId] = useState(0);
 
   useEffect(() => {
-      const getTenantData = async () => {
-          try {
-          const tenantData = await fetchTenantDetails();
-          setTenantId(tenantData.tenant_id || '0');
-          } catch (error) {
-          console.error('Failed to load tenant data:', error);
-          }
-      };
+    setSearchTerm(initialValue);
+    setSelectedName(initialValue);
+  }, [initialValue]);
 
-      getTenantData();
-  }, []);
 
   // Fetch data dari API
-  const getMembersData = useCallback(async () => {
-    const token = Cookies.get("token.oqoe");
-    const url = tenantId ? `/api/member?tenan_id=${tenantId}` : "/api/member";
-
+  const getUnitsData = useCallback(async () => {
+    const token = Cookies.get("token.app_oq");
+    
     try {
-      const response = await fetch(url, {
+      const response = await fetch(`/api/unit`,  {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -40,16 +33,17 @@ export default function UnitAutocomplete({onSelect }) {
       });
 
       const data = await response.json();
-      setMembersData(data.data || []);
-      setFilteredData(data.data || []); // Inisialisasi filteredData
+      const occupiedUnits = data.data.filter(unit => unit.status === 'occupied');
+      setUnitsData(occupiedUnits || []);
+      setFilteredData(occupiedUnits || []); // Inisialisasi filteredData
     } catch (error) {
       console.error("Error fetching tenant details:", error.message);
     }
   }, [tenantId]);
 
   useEffect(() => {
-    getMembersData();
-  }, [getMembersData]);
+    getUnitsData();
+  }, [getUnitsData]);
 
   // Fungsi untuk menangani pencarian
   const handleSearch = (value) => {
@@ -58,8 +52,8 @@ export default function UnitAutocomplete({onSelect }) {
       setFilteredData([]); // Jika kosong, tidak ada opsi yang ditampilkan
       setIsOpen(false);
     } else {
-      const filtered = membersData.filter((member) =>
-        member.member_address.toLowerCase().includes(value.toLowerCase())
+      const filtered = unitsData.filter((unit) =>
+        unit.house_number.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredData(filtered);
       setIsOpen(true); // Tampilkan dropdown saat mengetik
@@ -67,11 +61,11 @@ export default function UnitAutocomplete({onSelect }) {
   };
 
   // Pilih unit dari hasil autocomplete
-  const handleSelect = (member) => {
-    setSearchTerm(member.member_address); // Yang tampil di input adalah member_address
-    setSelectedName(member.member_name);
+  const handleSelect = (unit) => {
+    setSearchTerm(unit.house_number); // Yang tampil di input adalah unit.house_number
+    setSelectedName(unit.unit_name);
     setIsOpen(false);
-    if (onSelect) onSelect({ id: member.member_id, name: member.member_name });
+    if (onSelect) onSelect({ id: unit.unit_id, name: unit.house_number });
   };
 
   return (
@@ -95,13 +89,13 @@ export default function UnitAutocomplete({onSelect }) {
       {isOpen && (
         <div className="absolute z-10 mt-1 w-full bg-white shadow-lg border border-gray-300 rounded-md max-h-48 overflow-y-auto">
           {filteredData.length > 0 ? (
-            filteredData.map((member) => (
+            filteredData.map((unit) => (
               <div
-                key={member.member_id}
+                key={unit.unit_id}
                 className="px-4 py-2 cursor-pointer hover:bg-blue-gray-100"
-                onMouseDown={() => handleSelect(member)}
+                onMouseDown={() => handleSelect(unit)}
               >
-                {member.member_address} {/* Tampilkan alamat unit */}
+                <span className="font-medium">{unit.house_number}</span> - {unit.unit_name}
               </div>
             ))
           ) : (

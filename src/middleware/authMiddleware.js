@@ -1,17 +1,18 @@
 // /src/middleware/authMiddleware.js
 import jwt from 'jsonwebtoken';
 
-export const authMiddleware = async (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1]; // Bearer <token>
+export const authMiddleware = async (req) => {
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    
     if (!token) {
-        return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
+        throw new Error('Unauthorized');
     }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded; // Tambahkan user info ke req
-        next();
+        return decoded; // Return user data
     } catch (error) {
-        return new Response(JSON.stringify({ message: 'Invalid token' }), { status: 401 });
+        throw new Error('Invalid token');
     }
 };

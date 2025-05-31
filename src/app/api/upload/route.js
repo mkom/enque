@@ -1,43 +1,73 @@
-import { Storage } from "@google-cloud/storage";
-import path from "path";
+// app/api/upload/images/route.js
+import cloudinary from "@/lib/cloudinary";
+import { Readable } from "stream";
+import { NextResponse } from "next/server";
+import { successResponse,errorResponse } from "@/utils/apiResponse";
+import jwt from 'jsonwebtoken';
 import { apiKeyMiddleware } from "@/middleware/apiKeyMiddleware";
 
-const storage = new Storage({
-  keyFilename: path.join(process.cwd(), "gcs-key.json"), // Path ke service account key
-});
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
-const bucketName = "omqoe"; // Ganti dengan nama bucket-mu
+function bufferToStream(buffer) {
+  return new Readable({
+    read() {
+      this.push(buffer);
+      this.push(null);
+    },
+  });
+}
 
 export async function POST(req) {
-
-  try {
     apiKeyMiddleware(req);
-    const formData = await req.formData();
-    const file = formData.get("file");
 
-    if (!file) {
-      return new Response(JSON.stringify({ error: "No file uploaded" }), { status: 400 });
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return errorResponse('Unauthorized', 'Token not provided', 401);
     }
 
-    const buffer = await file.arrayBuffer();
-    const fileName = `transfer_proof/${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
-    const bucket = storage.bucket(bucketName);
-    const blob = bucket.file(fileName);
+    const token = authHeader.split(' ')[1];
+    let decodedToken;
 
-    // Upload file ke GCS
-    await blob.save(Buffer.from(buffer), {
-      metadata: { contentType: file.type },
-    });
+    try {
+        decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+        return errorResponse('Unauthorized', 'Invalid or expired token', 401);
+    }
 
-    // Buat file publik
-    await blob.makePublic();
+    const { tenantId, userId: createdBy } = decodedToken;
 
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
-    //console.log("Public URL:", publicUrl); 
+    const formData = await req.formData();
+    const files = formData.getAll("files");
 
-    return new Response(JSON.stringify({ url: publicUrl }), { status: 200 });
-  } catch (error) {
-    console.error("Upload error:", error);
-    return new Response(JSON.stringify({ error: "Upload failed" }), { status: 500 });
-  }
+    if (!files || files.length === 0) {
+      return errorResponse('No files uploaded', 'Please upload at least one file', 400);
+    }
+
+    const uploadResults = [];
+    for (const file of files) {
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "uploads",
+            timeout: 60000,
+          },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        bufferToStream(buffer).pipe(uploadStream);
+      });
+      uploadResults.push(result);
+    }
+
+    return NextResponse.json({ success: true, data: uploadResults });
+
 }

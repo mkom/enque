@@ -22,18 +22,18 @@ import {
     DialogFooter,
     Tooltip
 } from "@material-tailwind/react";
-import { fetchTenantDetails } from "@/utils/fetchTenant";
 import { Skeleton } from "../../../components/Skeleton";
 
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { registerLocale } from "react-datepicker";
-import { id } from "date-fns/locale"; 
+import { da, id } from "date-fns/locale"; 
+import { set } from "date-fns";
 registerLocale("id", id);
 const ITEMS_PER_PAGE = 20;
   
-const MemberSetup = ({}) => {
-    const [tenantId, setTenantId] = useState(0);
+const UnitSetup = ({}) => {
+   // const token = Cookies.get("token.oqoe");
     const [totalFees, setTotalFees] = useState(0);
     const [open, setOpen] = useState(false);
     const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -63,16 +63,16 @@ const MemberSetup = ({}) => {
 
     const TABLE_HEAD = ["No", "No Unit", "Nama", "No HP", "Status", ""];
     
-    const [memberName, setMemberName] = useState('');
-    const [memberAddress, setMemberAddress] = useState('');
-    const [memberNoPhone, setMemberNoPhones] = useState('');
-    const [memberStatus, setMemberStatus] = useState('occupied');
+    const [unitName, setUnitName] = useState('');
+    const [houseNumber, setHouseNumber] = useState('');
+    const [unitHoHP, setUnitHoHP] = useState('');
+    const [unitStatus, setUnitStatus] = useState('occupied');
     const [statusPeriod, setStatusPeriod] = useState(new Date().toISOString().slice(0, 7));  
-    const [memberIdEdit, setMemberIdEdit] = useState('');
+    const [unitIdEdit, setUnitIdEdit] = useState('');
     const [statusHistory, setStatusHistory] = useState([]);
     
     const [loading, setLoading] = useState(false);
-    const [membersData, setMembersData] = useState([]);
+    const [unitsData, setUnitsData] = useState([]);
     const [error, setError] = useState([
         {
             memberName: '',
@@ -91,98 +91,82 @@ const MemberSetup = ({}) => {
         return formattedDate;
     };
 
- 
-    useEffect(() => {
-        const getTenantData = async () => {
-            try {
-                const tenantData = await fetchTenantDetails();
-                setTenantId(tenantData.tenant_id || 0 );
-                setTotalFees(tenantData.total_fees | 0 );
-            } catch (error) {
-                console.error('Failed to load tenant data:', error);
-            }
-        };
-
-        getTenantData();
-    }, []);
-
-    const getMembersData =  useCallback( async () => {
-        const token = Cookies.get("token.oqoe");
+    const getUnitsData =  useCallback( async () => {
+        const token = Cookies.get("token.app_oq");
         //console.log(token)
         try {
-            const response = await fetch(`/api/member`, {
+            const response = await fetch(`/api/unit`, {
               method: 'GET',
               headers: {
                 Authorization: `Bearer ${token}`,
-                'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
-                'X-Tenant-Id': tenantId,
+                'x-api-key': process.env.NEXT_PUBLIC_API_KEY
               },
             });
         
             const data = await response.json();
-            setMembersData(data.data || []);
+            setUnitsData(data.data || []);
             //console.log(data)
             
 
           } catch (error) {
-            console.error('Error fetching tenant details:', error.message);
+            console.error('Error fetching unit details:', error.message);
             throw error;
           } finally {
             setSkeletonShow(false); 
           }
 
-    },[tenantId]);
+    },[]);
 
     useEffect(() => {
-        getMembersData();
-    }, [getMembersData]);
+        getUnitsData();
+    }, [getUnitsData]);
 
-    const totalVacant = membersData.filter(member => member.status === "vacant").length;
-    const totalOccupied = membersData.filter(member => member.status === "occupied").length;
+    //console.log(unitsData.filter(unit => unit.status === "vacant"));
+    const totalVacant = unitsData.filter(unit => unit.status === "vacant").length;
+    const totalOccupied = unitsData.filter(unit => unit.status === "occupied").length;
 
     const validateForm = async  () => {
         let valid = true;
         const newError = {
-            memberName: '',
-            memberAddress: '',
-            memberNoPhone: '',
-            memberStatus:'',
+            unitName: '',
+            houseNumber: '',
+            unitHoHP: '',
+            unitStatus: '',
         };
 
         // Validasi lokal
-        if (!memberName) {
-            newError.memberName = "Nama wajib diisi";
+        if (!unitName) {
+            newError.unitName = "Nama wajib diisi";
             valid = false;
         }
 
-        if (!memberAddress) {
-            newError.memberAddress = "No unit wajib diisi";
+        if (!houseNumber) {
+            newError.houseNumber = "No unit wajib diisi";
             valid = false;
         }
 
-        if (!memberStatus) {
-            newError.memberStatus =  "Status wajib dipilih";
+        if (!unitStatus) {
+            newError.unitStatus =  "Status wajib dipilih";
             valid = false;
         }
 
-        const token = Cookies.get("token.oqoe");
 
-        if(!memberIdEdit) {
+        if(!unitIdEdit) {
             try {
-                const response = await fetch(`/api/member`, {
+                const token = Cookies.get("token.app_oq");
+                const response = await fetch(`/api/unit`, {
                 method: 'GET',
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
-                    'X-Tenant-Id': tenantId,
                 },
                 });
     
                 const data = await response.json();
                 if (response.status === 200) {
 
-                    if(data.data.length > 0 && memberAddress === data.data[0].house_number) {
-                        newError.memberAddress ='No unit sudah terdaftar';
+                    if(data.data.length > 0 && houseNumber === data.data[0].house_number) {
+                        newError.houseNumber ='No unit sudah terdaftar';
                         valid = false;
                     }
                 }
@@ -205,21 +189,22 @@ const MemberSetup = ({}) => {
 
         if (isValid) {
             setLoading(true);
-
+            const token = Cookies.get("token.app_oq");
             try {
-                const response = await fetch('/api/member', {
-                  method: memberIdEdit ? 'PUT' : 'POST',
+                const response = await fetch('/api/unit', {
+                  method: unitIdEdit ? 'PUT' : 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
-                    'X-Tenant-Id': tenantId,
+                    Authorization: `Bearer ${token}`,
                   },
+                  
                   body: JSON.stringify({
-                    memberId:memberIdEdit,
-                    memberName,
-                    memberAddress,
-                    memberNoPhone,
-                    memberStatus,
+                    unitId: unitIdEdit,
+                    unitName,
+                    houseNumber,
+                    unitHoHP,
+                    unitStatus,
                     statusPeriod: statusPeriod + "-01",
                   }),
                 });
@@ -232,7 +217,7 @@ const MemberSetup = ({}) => {
               } finally {
                 setLoading(false); 
                 handleOpen();
-                getMembersData();
+                getUnitsData();
               }
 
         } else {
@@ -248,18 +233,18 @@ const MemberSetup = ({}) => {
     
 
     const resetForm = () => {
-        setMemberIdEdit('');
-        setMemberName('');
-        setMemberAddress('');
-        setMemberStatus('occupied');
-        setMemberNoPhones('');
+        setUnitIdEdit('');
+        setUnitName('');
+        setHouseNumber('');
+        setUnitStatus('occupied');
+        setUnitHoHP('');
         setStatusPeriod(new Date().toISOString().slice(0, 7));
         setError ([
             {
-            memberName: '',
-            memberAddress: '',
-            memberNoPhone: '',
-            memberStatus:'',
+            unitName: '',
+            houseNumber: '',
+            unitHoHP: '',
+            unitStatus: '',
             },
         ]);
     };
@@ -271,31 +256,32 @@ const MemberSetup = ({}) => {
         }
     }, [open]);
 
-    const handleEdit = (Member) => {
-        //console.log(Member)
-        setMemberIdEdit(Member.member_id);
-        setMemberName(Member.member_name);
-        setMemberAddress(Member.house_number);
-        setMemberNoPhones(Member.no_hp);
-        setMemberStatus(Member.status);
+    const handleEdit = (unit) => {
+        //console.log(unit)
+        setUnitIdEdit(unit.unit_id);
+        setUnitName(unit.unit_name);
+        setHouseNumber(unit.house_number);
+        setUnitHoHP(unit.no_hp);
+        setUnitStatus(unit.status);
         setStatusPeriod(
-            Member.status_date ? new Date(Member.status_date) : null
+            unit.status_date ? new Date(unit.status_date) : null
         );
-        setStatusHistory(Member.status_history);
+        setStatusHistory(unit.status_history);
     };
 
     const handleDelete = async () => {
         setLoading(true);
+        const token = Cookies.get("token.app_oq");
         try {
-            const response = await fetch('/api/member', {
+            const response = await fetch('/api/unit', {
                 method: 'DELETE',
                 headers: {
                 'Content-Type': 'application/json',
                 'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
+                'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                memberId:memberIdEdit,
-              
+                unitId: unitIdEdit,
                 }),
             });
 
@@ -303,7 +289,7 @@ const MemberSetup = ({}) => {
 
             if (response.status === 200) {
                 setLoading(false);
-                getMembersData();
+                getUnitsData();
                 setConfirmationOpen(false);
             } 
          
@@ -311,7 +297,7 @@ const MemberSetup = ({}) => {
          
         } finally {
           setLoading(false);
-          getMembersData();
+          getUnitsData();
           setConfirmationOpen(false);
         }
     };
@@ -346,23 +332,26 @@ const MemberSetup = ({}) => {
 
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("memberStatus", memberStatus);
-        formData.append("statusPeriod", statusPeriod);
-        formData.append("tenantId", tenantId);
+        // formData.append("memberStatus", memberStatus);
+        // formData.append("statusPeriod", statusPeriod);
+        const token = Cookies.get("token.app_oq");
 
         try {
-            const response = await fetch('/api/import/members', {
+            const response = await fetch('/api/import/units', {
                 method: 'POST',
                 headers: {
                     'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
+                    Authorization: `Bearer ${token}`,
                 },
                 body: formData,
             });
     
             const data = await response.json();
 
-            if (!response.ok) {
-                setErrorImport(data.error || "Terjadi kesalahan saat mengimpor data.");
+            //console.log(data);
+
+            if (data.errors?.length > 0 && data.errors) {
+                setErrorImport(data.errors);
             } else {
                 //alert("Data berhasil diimpor!");
                 setImportOpen(false);
@@ -374,8 +363,8 @@ const MemberSetup = ({}) => {
             setErrorImport("Terjadi kesalahan saat mengimpor data.");
           } finally {
             setLoading(false); 
-           // handleImport();
-            getMembersData();
+            setErrorImport('');
+            getUnitsData();
           }
     };
 
@@ -386,11 +375,11 @@ const MemberSetup = ({}) => {
         setSearchTerm(query);
     };
 
-    const filteredData = membersData.filter(data => {
+    const filteredData = unitsData.filter(data => {
         const search = searchTerm.toLowerCase(); // Normalisasi searchTerm untuk pencarian case-insensitive
         return (
             data?.house_number?.toLowerCase().includes(search) || // Cek alamat
-            data?.member_name?.toLowerCase().includes(search) || // Cek nama
+            data?.unit_name?.toLowerCase().includes(search) || // Cek nama unit
             (data?.no_hp?.toLowerCase() ?? '').includes(search) // Cek nomor telepon, jika null diubah jadi ''
         );
     });
@@ -405,7 +394,7 @@ const MemberSetup = ({}) => {
         <>
          <Card className=" w-full mb-8">
             <CardHeader floated={false} shadow={false} className="rounded-none">
-            <div className="mb-8 flex items-start justify-between gap-8">
+            <div className="mb-4 flex items-start justify-between gap-8">
                 <div>
                     <Typography variant="h5" color="blue-gray">
                         Unit
@@ -417,16 +406,16 @@ const MemberSetup = ({}) => {
                   
                 </div>
                 <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
-                <input type="file" accept=".csv" className="hidden" />
-                <Button onClick={handleImportOpen}  variant="outlined" className="flex items-center gap-3" size="sm">
-                    <ArrowDownTrayIcon strokeWidth={2} className="h-4 w-4" />  Import
-                </Button>
-                <Button onClick={handleOpen} variant="gradient"  className="flex items-center gap-3" size="sm">
-                    <DocumentPlusIcon strokeWidth={2} className="h-4 w-4" /> Tambah
-                </Button>
+                    <input type="file" accept=".csv" className="hidden" />
+                    <Button onClick={handleImportOpen}  variant="outlined" className="flex items-center gap-3" size="sm">
+                        <ArrowDownTrayIcon strokeWidth={2} className="h-4 w-4" />  Import
+                    </Button>
+                    <Button onClick={handleOpen} variant="gradient"  className="flex items-center gap-3" size="sm">
+                        <DocumentPlusIcon strokeWidth={2} className="h-4 w-4" /> Tambah
+                    </Button>
                 </div>
             </div>
-            <div className="flex flex-col items-center justify-between mb-4 gap-4 md:flex-row">
+            <div className="flex flex-col items-center justify-between  gap-4 md:flex-row">
                 <div className="flex gap-4">
                     <Typography className="mt-1 font-bold text-[16px] text-gray">
                        Dihuni: {totalOccupied ? totalOccupied : 0}
@@ -446,7 +435,7 @@ const MemberSetup = ({}) => {
             
             
             </CardHeader>
-            <CardBody className="px-0 pt-0 ">
+            <CardBody className="p-6 px-0 ">
                 <table className="w-full min-w-max table-auto text-left">
                     <thead>
                         <tr>
@@ -474,7 +463,7 @@ const MemberSetup = ({}) => {
                             </td>
                         </tr>
                     ) : currentPageData.length > 0 ? (
-                        currentPageData.map((member, index) => (
+                        currentPageData.map((unit, index) => (
                             <tr key={index} className="even:bg-blue-gray-50/50">
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-normal">
@@ -483,17 +472,17 @@ const MemberSetup = ({}) => {
                                 </td>
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-normal">
-                                        {member?.house_number}
+                                        {unit?.house_number}
                                     </Typography>
                                 </td>
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-normal">
-                                        {member?.member_name}
+                                        {unit?.unit_name}
                                     </Typography>
                                 </td>
                                 <td className="py-2 px-3">
                                     <Typography variant="small" color="blue-gray" className="font-normal">
-                                        {member?.no_hp}
+                                        {unit?.no_hp}
                                     </Typography>
                                 </td>
                                 <td className="py-2 px-3">
@@ -501,20 +490,20 @@ const MemberSetup = ({}) => {
                                     variant="ghost"
                                     size="sm"
                                     className="text-center max-w-20"
-                                    value={member?.status ==='vacant' ? "Kosong" : "Dihuni"}
-                                    color={member?.status === 'vacant' ? "blue-gray" : "green"}
+                                    value={unit?.status ==='vacant' ? "Kosong" : "Dihuni"}
+                                    color={unit?.status === 'vacant' ? "blue-gray" : "green"}
                                     />
 
                                 </td>
                                 <td className="py-2 px-3 flex gap-2">
                                     <Tooltip content="Ubah">
-                                        <IconButton className="h-8" onClick={() => { handleOpen(); handleEdit(member); }} variant="text">
+                                        <IconButton className="h-8" onClick={() => { handleOpen(); handleEdit(unit); }} variant="text">
                                             <PencilIcon className="h-4 w-4" />
                                         </IconButton>
                                     </Tooltip>
 
                                     <Tooltip content="Hapus">
-                                        <IconButton className="h-8" onClick={() => { setConfirmationOpen(true); setMemberIdEdit(member?.member_id); }} variant="text">
+                                        <IconButton className="h-8" onClick={() => { setConfirmationOpen(true); setUnitIdEdit(unit?.unit_id); }} variant="text">
                                             <TrashIcon className="h-4 w-4" />
                                         </IconButton>
                                     </Tooltip>
@@ -627,19 +616,19 @@ const MemberSetup = ({}) => {
                                 <Input
                                     color="gray"
                                     size="lg"
-                                    id="member_address"
-                                    name="member_address"
+                                    id="house_number"
+                                    name="house_number"
                                     // label="No Unit"
                                     // variant="outlined"
-                                    value={memberAddress  || ""}
-                                    onChange={(e) => setMemberAddress(e.target.value)}
+                                    value={houseNumber  || ""}
+                                    onChange={(e) => setHouseNumber(e.target.value)}
                                     placeholder="A1-01"
                                     labelProps={{
                                         className: "hidden",
                                       }}
                                     className="w-full placeholder:opacity-100 focus:border-t-blue-gray-900 !border-blue-gray-200"
                                 />
-                                {error.memberAddress && <p className="text-red-500 text-sm mt-1 ml-1">{error.memberAddress}</p>}
+                                {error.houseNumber && <p className="text-red-500 text-sm mt-1 ml-1">{error.houseNumber}</p>}
                             </div>
 
                             <div className=" ">
@@ -653,19 +642,17 @@ const MemberSetup = ({}) => {
                                 <Input
                                     color="black"
                                     size="md"
-                                    id="member_name"
-                                    name="member_name"
-                                    // label="Nama"
-                                    // variant="outlined"
-                                    value={memberName || ""}
-                                    onChange={(e) => setMemberName(e.target.value)}
+                                    id="unit_name"
+                                    name="unit_name"
+                                    value={unitName || ""}
+                                    onChange={(e) => setUnitName(e.target.value)}
                                     placeholder="Jhon Doe"
                                     labelProps={{
                                         className: "hidden",
                                       }}
                                     className="w-full placeholder:opacity-100 focus:border-t-blue-gray-900 !border-blue-gray-200"
                                 />
-                                {error.memberName && <p className="text-red-500 text-sm mt-1 ml-1">{error.memberName}</p>}
+                                {error.unitName && <p className="text-red-500 text-sm mt-1 ml-1">{error.unitName}</p>}
                             </div>
                             <div className=" ">
                             <Typography
@@ -679,19 +666,17 @@ const MemberSetup = ({}) => {
                                     color="black"
                                     size="md"
                                     type="number"
-                                    id="member_phone"
-                                    name="member_phone"
-                                    // label="No. Hp"
-                                    // variant="outlined"
-                                    value={memberNoPhone  || "" }
-                                    onChange={(e) => setMemberNoPhones(e.target.value)}
+                                    id="unit_no_hp" 
+                                    name="unit_no_hp"
+                                    value={unitHoHP  || "" }
+                                    onChange={(e) => setUnitHoHP(e.target.value)}
                                     placeholder="081187487152"
                                     labelProps={{
                                         className: "hidden",
                                       }}
                                     className="w-full placeholder:opacity-100 focus:border-t-blue-gray-900 !border-blue-gray-200"
                                 />
-                                {error.memberNoPhone && <p className="text-red-500 text-sm mt-1 ml-1">{error.memberNoPhone}</p>}
+                                {error.unitHoHP && <p className="text-red-500 text-sm mt-1 ml-1">{error.unitHoHP}</p>}
                             </div>
 
                             
@@ -717,14 +702,14 @@ const MemberSetup = ({}) => {
                                         size="md"
                                         variant="outlined"
                                         required
-                                        value={memberStatus}
-                                        onChange={(value) => setMemberStatus(value)}
+                                        value={unitStatus}
+                                        onChange={(value) => setUnitStatus(value)}
                                         className="!border !border-gray-300 "
                                     >
-                                        <Option value="occupied">{memberStatus === 'occupied' ? 'Dihuni': 'Dihuni'}</Option>
-                                        <Option value="vacant">{memberStatus === 'vacant' ? 'Kosong': 'Kosong'}</Option>
+                                        <Option value="occupied">{unitStatus === 'occupied' ? 'Dihuni': 'Dihuni'}</Option>
+                                        <Option value="vacant">{unitStatus === 'vacant' ? 'Kosong': 'Kosong'}</Option>
                                     </Select>
-                                    {error.memberStatus && <p className="text-red-500 text-sm mt-1 ml-1">{error.memberStatus}</p>}
+                                    {error.unitStatus && <p className="text-red-500 text-sm mt-1 ml-1">{error.unitStatus}</p>}
 
                                     
                                 </div>
@@ -755,7 +740,7 @@ const MemberSetup = ({}) => {
                                 
                             </div>
 
-                            {memberIdEdit && (
+                            {unitIdEdit && (
                                 <div className="!mt-4">
                                     <Typography color="blue-gray" className="font-bold text-[14px] ">{statusHistory.length > 1 ?'Riwayat perubahan status:':'Belum ada riwayat perubahan status'}</Typography>
                                     {statusHistory && statusHistory.length > 1 && (
@@ -841,7 +826,7 @@ const MemberSetup = ({}) => {
                         </Typography>
                         <Typography
                             as="a"
-                             href="/path/to/sample-format.xlsx"
+                            href="/sample-format.xlsx"
                             download
                             className="text-blue-500 hover:underline mr-2"
                             >
@@ -876,7 +861,7 @@ const MemberSetup = ({}) => {
                          
                      </DialogBody>
                      <DialogFooter className="space-x-2">
-                         <Button variant="text" color="blue-gray" onClick={() => setImportOpen(false)}>
+                         <Button variant="text" color="blue-gray" onClick={() => { setImportOpen(false); setErrorImport(''); }}>
                              Batal
                          </Button>
                          <Button variant="gradient" onClick={handleImport} disabled={loading}>
@@ -891,4 +876,4 @@ const MemberSetup = ({}) => {
     );
 }
 
-export default MemberSetup;
+export default UnitSetup;

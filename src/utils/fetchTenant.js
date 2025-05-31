@@ -1,6 +1,7 @@
 import Cookies from "js-cookie";
+
 export const fetchTenantDetails = async () => {
-    const token = Cookies.get("token.oqoe");
+    const token = Cookies.get("token.app_oq");
     const apiKey = process.env.NEXT_PUBLIC_API_KEY;
 
     try {
@@ -12,9 +13,9 @@ export const fetchTenantDetails = async () => {
         },
       });
   
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`);
-      }
+      // if (!response.ok) {
+      //   throw new Error(`Failed to fetch: ${response.status}`);
+      // }
   
       const data = await response.json();
       //console.log(data)

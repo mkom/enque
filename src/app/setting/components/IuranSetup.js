@@ -51,7 +51,7 @@ const IuranSetup = ({}) => {
     const [feeAmount, setFeeAmount] = useState('');
     const [feeIdEdit, setFeeIdEdit] = useState('');
     const [feePeriod, setFeePeriod] = useState();  
-    const [feeMemberStatus, setMemberStatus] = useState('occupied');
+    const [feeUnitStatus, setUnitStatus] = useState('occupied');
     const [feeDueDate, setFeeDueDate] = useState('1');
     const [loading, setLoading] = useState(false);
     const [FeesData, setFeesData] = useState([]);
@@ -75,22 +75,8 @@ const IuranSetup = ({}) => {
         return formattedDate;
     };
 
-    useEffect(() => {
-        const getTenantData = async () => {
-            try {
-            const tenantData = await fetchTenantDetails();
-            setTenantId(tenantData.tenant_id || '0');
-            } catch (error) {
-            console.error('Failed to load tenant data:', error);
-            }
-        };
-
-        getTenantData();
-    }, []);
-
     const getFeesData =  useCallback( async () => {
-        const token = Cookies.get("token.oqoe");
-       // const url = tenantId ? `/api/fee?tenan_id=${tenantId}` : '/api/fee';
+        const token = Cookies.get("token.app_oq");
 
         try {
             const response = await fetch(`/api/fee`, {
@@ -98,7 +84,6 @@ const IuranSetup = ({}) => {
               headers: {
                 Authorization: `Bearer ${token}`,
                 'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
-                'X-Tenant-Id': tenantId,
               },
             });
         
@@ -127,7 +112,7 @@ const IuranSetup = ({}) => {
             feeType: '',
             feeStatus: '',
             feeAmount:'',
-            feeMemberStatus:''
+            feeUnitStatus:''
         };
 
         if (!feeName) {
@@ -160,15 +145,15 @@ const IuranSetup = ({}) => {
    
     const onSubmit = async(e) => {
         if (validateForm()) {
-            
             setLoading(true);
+            const token = Cookies.get("token.app_oq");
             try {
                 const response = await fetch('/api/fee', {
                   method: feeIdEdit ? 'PUT' : 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
-                    'X-Tenant-Id': tenantId,
+                    Authorization: `Bearer ${token}`,
                   },
                   body: JSON.stringify({
                     feeID:feeIdEdit,
@@ -177,18 +162,14 @@ const IuranSetup = ({}) => {
                     feeStatus: feeStatus,
                     effective_date: feePeriod + "-01",
                     amount: feeAmount,
-                    member_status: feeMemberStatus,
+                    unitStatus: feeUnitStatus,
                     tenantId
                   }),
                 });
         
                 const data = await response.json();
 
-                if (response.status === 201) {
 
-                } else {
-               
-                }
               } catch (error) {
                 
               } finally {
@@ -226,13 +207,14 @@ const IuranSetup = ({}) => {
         setFeePeriod(new Date().toISOString().slice(0, 7));
         setFeeIdEdit('');
         setFeeDueDate("1");
-        setMemberStatus('occupied');
+        setUnitStatus('occupied');
         setError ([
             {
                 feeName: '',
                 feeType: '',
                 feeStatus: '',
                 feeAmount:'',
+                feeUnitStatus: '',
             },
         ]);
     };
@@ -251,20 +233,23 @@ const IuranSetup = ({}) => {
         setFeeType(Fee.is_recurring === true? 'true': 'false');
         setFeeStatus(Fee.status);
         setFeeAmount(Fee.amount);
-        setMemberStatus(Fee.member_status);
+        setUnitStatus(Fee.unit_status);
         setFeePeriod(new Date(Fee.effective_date).toISOString().slice(0, 7));
         setAmountHistory(Fee.amount_history);
     };
 
     const handleDelete = async () => {
         setLoading(true);
+        const token = Cookies.get("token.app_oq");
         try {
             const response = await fetch('/api/fee', {
                 method: 'DELETE',
                 headers: {
                 'Content-Type': 'application/json',
                 'x-api-key': process.env.NEXT_PUBLIC_API_KEY,
+                Authorization: `Bearer ${token}`,
                 },
+
                 body: JSON.stringify({
                 feeId:feeIdEdit,
               
@@ -276,6 +261,7 @@ const IuranSetup = ({}) => {
             if (response.status === 200) {
                 setLoading(false);
                 getFeesData();
+                resetForm();
                 setConfirmationOpen(false);
             } 
          
@@ -284,9 +270,10 @@ const IuranSetup = ({}) => {
         } finally {
           setLoading(false);
           getFeesData();
+          resetForm();
           setConfirmationOpen(false);
         }
-      };
+    };
     
     return (
         <>
@@ -364,17 +351,17 @@ const IuranSetup = ({}) => {
                                     size="sm"
                                     variant="ghost"
                                     value={
-                                        fee.member_status === "occupied"
+                                        fee.unit_status === "occupied"
                                         ? "Dihuni"
-                                        : fee.member_status === "vacant"
+                                        : fee.unit_status === "vacant"
                                         ? "Kosong"
                                         : "Semua"
                                     }
                                     className="text-center max-w-20"
                                     color={
-                                        fee.member_status === "occupied"
+                                        fee.unit_status === "occupied"
                                         ? "green"
-                                        : fee.member_status === "vacant"
+                                        : fee.unit_status === "vacant"
                                         ? "gray"
                                         : "blue"
                                     }
@@ -560,8 +547,8 @@ const IuranSetup = ({}) => {
                                 <Select 
                                 id="status"
                                 size="md"
-                                value={feeMemberStatus}
-                                onChange={(value) => setMemberStatus(value)}
+                                value={feeUnitStatus}
+                                onChange={(value) => setUnitStatus(value)}
                                 labelProps={{
                                     className: "hidden",
                                   }}
@@ -639,6 +626,9 @@ const IuranSetup = ({}) => {
                                             id="nominal"
                                             name="nominal"
                                             placeholder="Nominal"
+                                            autoComplete="off" 
+                                            spellCheck="false" 
+                                            autoCorrect="off"
                                             className="!border pl-9 !border-gray-300 placeholder:opacity-100"
                                             />
                                             {error.feeAmount && error.feeAmount && (

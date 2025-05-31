@@ -1,3 +1,4 @@
+//component/Sidebar.js
 "use client";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -8,6 +9,7 @@ import {
   List,
   ListItem,
   ListItemPrefix,
+  ListItemSuffix,
   Chip,
   Accordion,
   AccordionHeader,
@@ -16,21 +18,17 @@ import {
 
 import {
     PresentationChartBarIcon,
-    ShoppingBagIcon,
-    UserCircleIcon,
     Cog6ToothIcon,
-    InboxIcon,
-    PowerIcon,
     BanknotesIcon,
     Bars4Icon,
-    NewspaperIcon,
-    HomeIcon
+    DocumentCurrencyDollarIcon,
+    DocumentTextIcon
   } from "@heroicons/react/24/solid";
 
   import { ChevronRightIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [open, setOpen] = useState(0);
   const pathname = usePathname();
 
@@ -38,330 +36,259 @@ export default function Sidebar() {
     setOpen(open  === value ? 0 : value);
   };
 
+  const toggleSidebar = () => {
+    setIsOpen((prev) => !prev);
+  };
+
+  // Reset open to 0 when sidebar is collapsed
+  if (isOpen && open !== 0) {
+    setOpen(0);
+  }
+
+  // Reset open to 0 when screen is below 'md'
+  if (typeof window !== "undefined") {
+    if (window.innerWidth < 768 && open !== 0) {
+      setOpen(0);
+    }
+  }
+
   return (
-    <Card className={`${
-      isOpen ? " w-full" : " w-16" 
-    } transition-transform min-h-[100vh]   max-w-[236px]  shadow-xl shadow-blue-gray-900/5`}>
+    <Card className={`
+      transition-all duration-500 ease-in-out  min-h-[100vh] rounded-none shadow-none  overflow-hidden
+      ${isOpen ? "w-[268px] lg:w-[71px]" : "w-[71px] lg:w-[268px]"}
+    `}
+    >
      
-     <div className={` mb-2 pl-5 pr-5 py-4 bg-light-blue-200 `}>
+     <div className={` mb-2 flex justify-between  items-center py-4 px-4 bg-light-blue-200 `}>
           
-        <div className={`${
-          isOpen ? "translate-x-0" : "-translate-x-20 ml-1" 
-          } flex transition-transform justify-between items-center content-center`}>
-          
-          <Typography variant="h4" color="blue-gray" 
-            className={`${
-            isOpen ? "translate-x-0" : "-translate-x-20 " 
-            } transition-transform font-bold`}>
-            OQOE
-          </Typography>
-        
+        <div className={ `flex transition-transform w-full justify-between items-center content-center`}>
           <button
               className=" text-gray rounded-md"
-              onClick={() => setIsOpen(!isOpen)}
+              onClick={toggleSidebar}
             >
             <Bars4Icon className="h-8 w-8" />
           </button>
+          <Typography variant="h4" color="blue-gray" 
+            className={`
+              ml-5
+            transition-all duration-500 ease-in-out font-bold`}>
+            ENQUE
+          </Typography>
         </div>
 
       </div>
-        
 
-      <List className={`transition-transform   max-w-[236px]`}>
-
-       
-
-        <ListItem className={`${
-          isOpen ? "w-full" : " w-11 overflow-hidden " 
-          } ${pathname === "/dashboard" ? "bg-blue-gray-50 bg-opacity-80 text-blue-gray-900 outline-none": ""} p-0 transition-transform`}>
-
-            <Typography
-              as="a"
-              href="/dashboard"
-              className="w-full flex p-3"
-            >
-
-            <ListItemPrefix>
-              <PresentationChartBarIcon className="h-5 w-5" />
+      <List className="transition-all duration-500 ease-in-out !min-w-[60px] !max-w-[236px] !py-1">
+        <ListItem className={`${pathname === "/dashboard" ? "bg-blue-gray-50 bg-opacity-80 " : ""}`} >
+          <Typography
+          as="a"
+          href="/dashboard"
+          className={`w-full flex font-medium overflow-hidden `}
+          >
+            <ListItemPrefix className="mr-0" >
+              <PresentationChartBarIcon className="h-6 w-6 md:h-7 md:w-7" />
             </ListItemPrefix>
-
-            <span className={`${
-              isOpen ? "flex opacity-1 font-medium" : "hidden opacity-0" 
-              } transition-transform` }>
-                  Dashboard
-            </span>
-              
-            </Typography>
-        
-                 
-            
+            <span className="ml-4 font-semibold">Dashboard</span>
+          </Typography>
         </ListItem>
 
-       
         <Accordion
           open={open === 1}
           icon={
             <ChevronDownIcon
               strokeWidth={2.5}
-              className={`mx-auto h-4 w-4 transition-transform ${open === 2 ? "rotate-180" : ""}`}
+              className={`mx-auto h-4 w-4 transition-transform ${open === 1 ? "rotate-180" : ""}`}
             />
           }
-          className={`${
-            isOpen ? "w-full" : " w-11 overflow-hidden rounded" 
-            } ${pathname === "/dues" ? "": ""} p-0 transition-transform`}
         >
-          <ListItem className="p-0" selected={open === 1}>
-            <AccordionHeader onClick={() => handleOpen(1)} className={`${pathname === "/dues"  ? "bg-blue-gray-50 bg-opacity-80 rounded-lg text-blue-gray-900 outline-none": ""} border-b-0 p-3`} >
-              <ListItemPrefix>
-                <BanknotesIcon className="h-5 w-5" />
+          <ListItem className={`p-0 ${pathname === "/dues" || pathname === "/dues/bills" || pathname === "/dues/payments" || pathname === "/dues/invoices" ? "bg-blue-gray-50 bg-opacity-80 " : ""}`} selected={open === 1}>
+            <AccordionHeader onClick={() => handleOpen(1)} className="border-b-0 p-3">
+              <ListItemPrefix className="mr-0">
+                <BanknotesIcon className="h-6 w-6 md:h-7 md:w-7" />
               </ListItemPrefix>
-              <Typography  color="blue-gray" className="mr-auto font-normal">
+              <Typography color="blue-gray" className="mr-auto font-semibold ml-5">
                 Iuran
               </Typography>
             </AccordionHeader>
           </ListItem>
+
           <AccordionBody className="py-1">
-            <List className="p-0">
-              <Typography
-                as="a"
-                href="/dues"
-                className="w-full flex font-medium"
-              >
-
+            <List className="p-0 transition-all duration-500 ease-in-out !min-w-[60px] !max-w-[236px] !py-1">
               <ListItem>
                 <ListItemPrefix>
                   <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                 </ListItemPrefix>
-                Iuran
+                <Typography
+                  as="a"
+                  href="/dues"
+                className={`font-normal text-blue-gray-700 leading-tight text-start ${pathname === "/dues" ? "text-blue-500 font-semibold" : ""}`}>
+                  Pengaturan Iuran
+                </Typography>
               </ListItem>
-
-              </Typography>
-
-              <Typography
-                as="a"
-                href="/dues/invoice"
-                className="w-full flex font-medium"
-              >
-
               <ListItem>
                 <ListItemPrefix>
                   <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                 </ListItemPrefix>
-                Tagihan
+                <Typography
+                  as="a"
+                  href="/dues/bills"
+                  className={`font-normal text-blue-gray-700 leading-tight text-start ${pathname === "/dues/bills" ? "text-blue-500 font-semibold" : ""}`}>
+                  Tagihan
+                </Typography>
               </ListItem>
-
-              </Typography>
-
-              <Typography
-                as="a"
-                href="/dues/payment"
-                className="w-full flex font-medium"
-              >
-
               <ListItem>
                 <ListItemPrefix>
                   <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                 </ListItemPrefix>
-                Pembayaran
+                <Typography 
+                  as ="a"
+                  href="/dues/payments"
+                  className={`font-normal text-blue-gray-700 leading-tight text-start ${pathname === "/dues/payments" ? "text-blue-500 font-semibold" : ""}`}>
+                  Pembayaran
+                </Typography>
               </ListItem>
-
-              </Typography>
-              
-              
+              <ListItem className={`${ pathname === "/dues/invoices" ? "bg-blue-gray-50 bg-opacity-80 " : ""}`}>
+                <ListItemPrefix>
+                  <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                </ListItemPrefix>
+                <Typography 
+                  as ="a"
+                  href="/dues/invoices"
+                  className={`font-normal text-blue-gray-700 leading-tight text-start ${pathname === "/dues/invoices" ? "text-blue-500 font-semibold" : ""}`}>
+                  Invoices
+                </Typography>
+              </ListItem>
             </List>
           </AccordionBody>
-
         </Accordion>
-
-        {/* <ListItem  className={`${
-            isOpen ? "w-full" : " w-11 overflow-hidden " 
-            } ${pathname === "/contribution" ? "bg-blue-gray-50 bg-opacity-80 text-blue-gray-900 outline-none": ""} p-0 transition-transform`}>
-            
-            <Typography
-                as="a"
-                href="/contribution"
-                className="w-full flex p-3"
-              >
-            <ListItemPrefix >
-              <BanknotesIcon className="h-5 w-5" />
-            </ListItemPrefix>
-            <span className={`${
-              isOpen ? "flex opacity-1 font-medium" : "hidden opacity-0" 
-              } transition-transform` }>
-                Iuran
-            </span>
-            </Typography>
-        </ListItem>
-        */}
-       
-        {/* <ListItem  className={`${
-          isOpen ? "w-full" : " w-11 overflow-hidden " 
-          } ${pathname === "/houses" ? "bg-blue-gray-50 bg-opacity-80 text-blue-gray-900 outline-none": ""} p-0 transition-transform`}>
-          
-          <Typography
-              as="a"
-              href="/houses"
-              className="w-full flex p-3"
-            >
-              <ListItemPrefix>
-                <HomeIcon className="h-5 w-5" />
-              </ListItemPrefix>
-              <span className={`${
-               isOpen ? "flex opacity-1 font-medium" : "hidden opacity-0" 
-              } transition-transform` }>
-                Rumah
-              </span>
-
-          </Typography>
-        </ListItem> */}
-
-        <ListItem  className={`${
-          isOpen ? "w-full" : " w-11 overflow-hidden " 
-          } ${pathname === "/report" ? "bg-blue-gray-50 bg-opacity-80 text-blue-gray-900 outline-none": ""} p-0 transition-transform`}>
-          
-          <Typography
-              as="a"
-              href="/report"
-              className="w-full flex p-3"
-            >
-              <ListItemPrefix>
-                <NewspaperIcon className="h-5 w-5" />
-              </ListItemPrefix>
-              <span className={`${
-               isOpen ? "flex opacity-1 font-medium" : "hidden opacity-0" 
-              } transition-transform` }>
-                Laporan
-              </span>
-
-          </Typography>
-        </ListItem>
-
         
-
-        <ListItem  className={`${
-          isOpen ? "w-full" : " w-11 overflow-hidden " 
-          } transition-transform`}>
-          <ListItemPrefix>
-            <ShoppingBagIcon className="h-5 w-5" />
-          </ListItemPrefix>
-          <span className={`${
-           isOpen ? "flex opacity-1 font-medium" : "hidden opacity-0" 
-          } transition-transform` }>Catatan Keuangan</span>
+        <ListItem className={`${pathname === "/transactions" ? "bg-blue-gray-50 bg-opacity-80 " : ""}`} >
+          <Typography
+          as="a"
+          href="/transactions"
+          className={`w-full flex font-medium overflow-hidden `}
+          >
+            <ListItemPrefix className="mr-0" >
+              <DocumentCurrencyDollarIcon className="h-6 w-6 md:h-7 md:w-7" />
+            </ListItemPrefix>
+            <span className="ml-4 font-semibold">Aruskas</span>
+          </Typography>
         </ListItem>
-
+        
+        <ListItem >
+          <Typography
+          as="a"
+          href="/dashboard"
+          className={`w-full flex font-medium overflow-hidden `}
+          >
+            <ListItemPrefix className="mr-0" >
+              <DocumentTextIcon className="h-6 w-6 md:h-7 md:w-7" />
+            </ListItemPrefix>
+            <span className="ml-4 font-semibold">Laporan</span>
+          </Typography>
+        </ListItem>
 
         <Accordion
-          open={open === 4}
+          open={open === 2}
           icon={
             <ChevronDownIcon
               strokeWidth={2.5}
               className={`mx-auto h-4 w-4 transition-transform ${open === 2 ? "rotate-180" : ""}`}
             />
           }
-          className={`${
-            isOpen ? "w-full" : " w-11 overflow-hidden rounded" 
-            } ${pathname === "/setting" || pathname === "/setting/genaral" || pathname === "/setting/dues" ? "": ""} p-0 transition-transform`}
         >
-          <ListItem className="p-0" selected={open === 4}>
-            <AccordionHeader onClick={() => handleOpen(4)} className={`${pathname === "/setting" || pathname === "/setting/genaral" || pathname === "/setting/dues" ? "bg-blue-gray-50 bg-opacity-80 rounded-lg text-blue-gray-900 outline-none": ""} border-b-0 p-3`} >
-              <ListItemPrefix>
-                <Cog6ToothIcon className="h-5 w-5" />
+          <ListItem className="p-0" selected={open === 2}>
+            <AccordionHeader onClick={() => handleOpen(2)} className="border-b-0 p-3">
+              <ListItemPrefix className="mr-0">
+                <Cog6ToothIcon className="h-6 w-6 md:h-7 md:w-7" />
               </ListItemPrefix>
-              <Typography  color="blue-gray" className="mr-auto font-normal">
+              <Typography color="blue-gray" className="mr-auto font-semibold ml-5">
                 Pengaturan
               </Typography>
             </AccordionHeader>
           </ListItem>
-          
-          <AccordionBody className="py-1">
-            <List className="p-0">
-              <Typography
-                as="a"
-                href="/setting/genaral"
-                className="w-full flex font-medium"
-              >
 
+          <AccordionBody className="py-1">
+            <List className="p-0 transition-all duration-500 ease-in-out !min-w-[60px] !max-w-[236px] !py-1">
               <ListItem>
                 <ListItemPrefix>
                   <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                 </ListItemPrefix>
-                Pengaturan Umum
+                <Typography 
+                as ="a"
+                href="/dues"
+                className="font-normal text-blue-gray-700 leading-tight text-start">
+                  Pengaturan Umum
+                </Typography>
               </ListItem>
-
-              </Typography>
-              <Typography
-                as="a"
-                href="/setting/dues"
-                className="w-full flex font-medium"
-              >
-              <ListItem className={`${pathname === "/setting/dues"  ? "bg-blue-gray-50 bg-opacity-80 rounded-lg text-blue-gray-900 outline-none": ""}`}>
+              <ListItem>
                 <ListItemPrefix>
                   <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                 </ListItemPrefix>
-                Iuran
+                <Typography 
+                  as ="a"
+                  href="/setting/dues"
+                  className="font-normal text-blue-gray-700 leading-tight text-start">
+                  Iuran
+                </Typography>
               </ListItem>
-              </Typography>
-              
-
-              <Typography
-                as="a"
-                href="/setting/report"
-                className="w-full flex font-medium"
-              >
-
-                <ListItem className={`${pathname === "/" || pathname === "/" ? "bg-blue-gray-50 bg-opacity-80 rounded-lg text-blue-gray-900 outline-none": ""}`}>
-                  <ListItemPrefix>
-                    <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                  </ListItemPrefix>
+              <ListItem>
+                <ListItemPrefix>
+                  <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                </ListItemPrefix>
+                <Typography 
+                  as ="a"
+                  href="/dues/payments"
+                  className="font-normal text-blue-gray-700 leading-tight text-start">
+                  Transaksi
+                </Typography>
+              </ListItem>
+              <ListItem>
+                <ListItemPrefix>
+                  <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                </ListItemPrefix>
+                <Typography 
+                  as ="a"
+                  href="/dues/invoices"
+                  className="font-normal text-blue-gray-700 leading-tight text-start">
                   Laporan
-                </ListItem>
-
-              </Typography>
-
-              <Typography
-                as="a"
-                href="/setting/cashflow"
-                className="w-full flex font-medium"
-              >
-
-                <ListItem className={`${pathname === "/setting" || pathname === "/setting/cashflow" ? "bg-blue-gray-50 bg-opacity-80 rounded-lg text-blue-gray-900 outline-none": ""}`}>
-                  <ListItemPrefix>
-                    <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                  </ListItemPrefix>
-                  Catatan Keuangan
-                </ListItem>
-
-              </Typography>
-             
+                </Typography>
+              </ListItem>
             </List>
           </AccordionBody>
-
         </Accordion>
-       
-        {/* <ListItem  className={`${
-          isOpen ? "w-full" : " w-11 overflow-hidden " 
-          } transition-transform`}>
+
+          <hr className="my-2 border-blue-gray-50" />
+        
+        {/* <hr className="my-2 border-blue-gray-50" />
+        <ListItem>
+          <ListItemPrefix>
+            <InboxIcon className="h-5 w-5" />
+          </ListItemPrefix>
+          Inbox
+          <ListItemSuffix>
+            <Chip value="14" size="sm" variant="ghost" color="blue-gray" className="rounded-full" />
+          </ListItemSuffix>
+        </ListItem>
+        <ListItem>
+          <ListItemPrefix>
+            <UserCircleIcon className="h-5 w-5" />
+          </ListItemPrefix>
+          Profile
+        </ListItem>
+        <ListItem>
           <ListItemPrefix>
             <Cog6ToothIcon className="h-5 w-5" />
           </ListItemPrefix>
-          <span className={`${
-          isOpen ? "flex justify-between w-full opacity-1 transition-transform " : "hidden opacity-0" 
-          } `}>Pengaturan</span>
-         
-        </ListItem> */}
-        <ListItem  className={`${
-          isOpen ? "w-full" : " w-11 overflow-hidden " 
-          } transition-transform`}>
+          Settings
+        </ListItem>
+        <ListItem>
           <ListItemPrefix>
             <PowerIcon className="h-5 w-5" />
           </ListItemPrefix>
-          <span className={`${
-          isOpen ? "flex justify-between w-full opacity-1 transition-transform " : "hidden opacity-0" 
-          } `}>Log Out</span>
-          
-        </ListItem>
-      </List>
-      
+          Log Out
+        </ListItem> */}
+      </List> 
       
     </Card>
   );

@@ -1,50 +1,56 @@
 // utils/redirect.js
 import Cookies from "js-cookie";
 import { isTokenExpired, getTokenPayload } from './jwtUtils';
+import { fetchUser } from "./fetchUser";
 
 export const redirectBasedOnAuth = async (router, pathname, allowedRoles = []) => {
+  //console.log("redirectBasedOnAuth", { router, pathname, allowedRoles });
 
-  const token = Cookies.get("token.oqoe");
+  const token = Cookies.get("token.app_oq");
 
-  // Jika token tidak ada, arahkan ke /login
   if (!token) {
+   // console.warn("No token found. Redirecting to /login.");
     router.push('/login');
     return;
   }
 
-  // Jika token kedaluwarsa, hapus token dan arahkan ke /login
   if (isTokenExpired(token)) {
-    Cookies.remove("token.oqoe");
+    //console.warn("Token expired. Removing token and redirecting to /login.");
+    Cookies.remove("token.app_oq");
     router.push('/login');
     return;
   }
 
   try {
-    // Ambil payload dari token
     const payload = getTokenPayload(token);
+   // console.log("Token payload:", payload);
 
-    // console.log(payload);
-    // console.log(allowedRoles)
-    // console.log(pathname)
-
-    // Jika pengguna sudah login dan mengakses `/`, arahkan ke `/dashboard`
     if (pathname === '/' && payload) {
+      //console.info("User already logged in. Redirecting to /dashboard.");
       router.push('/dashboard');
       return;
     }
-    
 
-    // Periksa apakah peran pengguna termasuk dalam `allowedRoles`
     if (allowedRoles.length > 0 && !allowedRoles.includes(payload.role)) {
-      router.push('/unauthorized'); // Arahkan ke halaman Unauthorized
+      //console.warn("User role not authorized. Redirecting to /unauthorized.");
+      router.push('/unauthorized');
       return;
     }
 
-    // Jika semua validasi lolos, tetap di halaman saat ini atau lanjutkan
+    // Check if tenantId in payload matches the user's tenant_id
+    const user = await fetchUser(); // Adjusted to call fetchUser without userId
+   // console.log("Fetched user:", user);
+    if (!user || user.tenant_id !== payload.tenantId) {
+      //console.warn("Tenant ID mismatch. Redirecting to /unauthorized.");
+      router.push('/unauthorized');
+      return;
+    }
+
+    //console.info("All validations passed. Staying on the current page.");
     return;
   } catch (error) {
-    console.error('Error verifying token:', error);
-    Cookies.remove("token.oqoe");
+    //console.error("Error verifying token in redirectBasedOnAuth:", error);
+    Cookies.remove("token.app_oq");
     router.push('/login');
   }
 };

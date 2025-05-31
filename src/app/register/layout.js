@@ -6,8 +6,8 @@ import Page from './page';
 
 
 export const metadata = {
-  title: "OQUE | Register",
-  description: "OQUE | Register",
+  title: "ONQOE | Register",
+  description: "ONQOE | Register",
 };
 
 export default function PageLayout() {

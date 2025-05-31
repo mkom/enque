@@ -23,6 +23,11 @@ export function TopNavbar() {
       const getTenantData = async () => {
           try {
           const tenantData = await fetchTenantDetails();
+          console.log("tenantData", tenantData);
+          if (!tenantData) {
+              console.error('Tenant data not found');
+              return;
+          }
           setNameTenant(tenantData.tenant_name || '');
           } catch (error) {
           console.error('Failed to load tenant data:', error);

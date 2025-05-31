@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import { pool } from '../../../lib/db';
 import validator from 'validator';
 import { apiKeyMiddleware } from '../../../middleware/apiKeyMiddleware';
+import { errorResponse, successResponse } from '@/utils/apiResponse';
+import { da } from 'date-fns/locale';
 
 export async function POST(req) {
     try {
@@ -14,7 +16,9 @@ export async function POST(req) {
         await pool.query('BEGIN'); // Memulai transaksi
 
         // Ambil data JSON dari body request
-        const { email, password, tenant_name, tenant_type } = await req.json();
+        const { email, password, tenant_name, tenant_type, role } = await req.json();
+
+       // console.log('Data yang diterima:', { email, password, tenant_name, tenant_type, role });
 
         // Validasi email
         if (!validator.isEmail(email)) {
@@ -33,7 +37,7 @@ export async function POST(req) {
         }
 
         // Cek apakah email sudah terdaftar
-        const existingUserByEmail = await pool.query('SELECT * FROM tenants WHERE tenant_email = $1', [email]);
+        const existingUserByEmail = await pool.query('SELECT * FROM users WHERE email = $1 AND role=$2', [email, role]);
         if (existingUserByEmail.rows.length > 0) {
             return new Response(JSON.stringify({ 
                 message: 'Email sudah terdaftar',
@@ -63,60 +67,35 @@ export async function POST(req) {
 
     
         const tenantResult = await pool.query(
-            'INSERT INTO tenants (tenant_email, tenant_password, tenant_name, tenant_type, unique_id) VALUES ($1, $2, $3, $4, $5) RETURNING tenant_id',
-            [email,hashedPassword,tenant_name, tenant_type, uniqueId]
+            'INSERT INTO tenants (tenant_email, tenant_name, tenant_type, unique_id) VALUES ($1, $2, $3, $4) RETURNING tenant_id',
+            [email, tenant_name, tenant_type, uniqueId]
         );
 
-       
-
+    
         const tenant_id = tenantResult.rows[0].tenant_id;
+        const userResult = await pool.query(
+            'INSERT INTO users (email, password, role, tenant_id) VALUES ($1, $2, $3, $4) RETURNING id',
+            [email, hashedPassword, role, tenant_id]
+        );
 
-        // const feeResult = await pool.query(
-        //    `INSERT INTO fees (tenant_id, fee_name, is_recurring, status)
-        //     SELECT $1, 'IPL', TRUE, 'active'
-        //     WHERE NOT EXISTS (SELECT 1 FROM fees WHERE tenant_id = $1);
-        //     `, [tenant_id]);
-
-        //console.log(feeResult)
-
-        // Memeriksa apakah fee berhasil dimasukkan atau sudah ada
-        // let feeId;
-        // if (feeResult.rows.length > 0) {
-        //     // Jika fee baru berhasil dimasukkan
-        //     feeId = feeResult.rows[0].fee_id;
-        // } else {
-        //     // Jika fee sudah ada, ambil fee_id yang ada
-        //     const existingFeeResult = await pool.query(
-        //         'SELECT fee_id FROM fees WHERE tenant_id = $1 LIMIT 1', [tenant_id]
-        //     );
-        //     feeId = existingFeeResult.rows[0].fee_id;
-        // }
-
-        // // Memasukkan rate untuk fee
-        // await pool.query(
-        //     'INSERT INTO fee_rates (effective_date, amount, fee_id) VALUES ($1, $2, $3) RETURNING *',
-        //     [new Date().toISOString().slice(0, 7) + '-01', '100000', feeId]
-        // );
-       
+        const user_id = userResult.rows[0].id;
 
         await pool.query('COMMIT');
-      
-
-      
-        return new Response(
-            JSON.stringify({
-                message: 'Registrasi berhasil',
-                tenant: tenantResult.rows[0],
-            }),
-            { status: 201 }
+        return successResponse
+        (
+            { data: { user_id, tenant_id } },
+            'Register is success',
+            201
         );
+
     } catch (error) {
         await pool.query('ROLLBACK');
     
         console.error('Kesalahan Registrasi:', error);
-        return new Response(
-            JSON.stringify({ message: 'Internal Server Error', error: error.message }),
-            { status: error.message === 'Unauthorized' ? 401 : 500 }
-        );
+        return errorResponse(
+            'Error registering user',
+            error,
+            500
+          );
     }
 }

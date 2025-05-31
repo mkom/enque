@@ -1,185 +1,165 @@
 import { pool } from '../../../lib/db';
+import jwt from 'jsonwebtoken';
 import { apiKeyMiddleware } from '../../../middleware/apiKeyMiddleware';
+import { successResponse, errorResponse } from '@/utils/apiResponse';
 
 export async function POST(req) {
     try {
         apiKeyMiddleware(req);
-        await pool.query('BEGIN'); 
 
-        const { feeName, feeType, feeStatus, effective_date, amount, member_status} = await req.json();
-        const tenantId = req.headers.get('x-tenant-id');
-        const today = new Date();
-        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        const dueDate = firstDayOfMonth.toISOString().slice(0, 10); // YYYY-MM-DD
-
-        const feeResult = await pool.query(
-            'INSERT INTO fees (fee_name, is_recurring, status, tenant_id, member_status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [feeName, feeType, feeStatus, tenantId, member_status]
-        );
-
-        const feeId = feeResult.rows[0].fee_id;
-
-        const feeRatestResult = await pool.query(
-            'INSERT INTO fee_rates (effective_date, amount, fee_id) VALUES ($1, $2, $3) RETURNING *',
-            [effective_date, amount, feeId]
-        );
-
-        const memberCheck = await pool.query(
-          `SELECT COUNT(*) AS member_count FROM members WHERE tenant_id = $1`,
-          [tenantId]
-        );
-        
-        const memberCount = parseInt(memberCheck.rows[0].member_count, 10);
-        
-        if (memberCount > 0) {
-          const memberResult = await pool.query(
-            `SELECT
-                m.member_id,
-                m.member_name,
-                m.house_number,
-                m.no_hp,
-                ms.status_history_id,
-                ms.status_date,
-                ms.status
-              FROM public.members m
-              LEFT JOIN public.member_status_history ms 
-                ON m.member_id = ms.member_id
-              WHERE m.tenant_id = $1
-              AND ms.status = $2`,
-            [tenantId, member_status]
-          );
-        
-          // Asumsi mengambil member_id pertama yang ditemukan
-          const memberId = memberResult.rows[0].member_id;
-        
-          // Ambil daftar iuran aktif yang sesuai dengan member_status
-          const activeFees = await pool.query(
-            'SELECT fee_id FROM fees WHERE tenant_id = $1 AND status = $2 AND member_status = $3',
-            [tenantId, 'active', member_status] // Filter berdasarkan memberStatus
-          );
-        
-          const oldestFeeDate = await pool.query(
-            'SELECT MIN(effective_date) as start_date FROM fee_rates WHERE fee_id = $1',
-            [feeId]
-          );
-        
-          const firstFeeDate = oldestFeeDate.rows[0].start_date ? new Date(oldestFeeDate.rows[0].start_date) : null;
-          const today = new Date();
-        
-          let invoiceIds = [];
-          let currentMonth = new Date(firstFeeDate);
-        
-          if(feeType === true) {
-            while (currentMonth <= today) {
-              // Buat invoice untuk bulan tertentu
-              const invoiceResult = await pool.query(
-                'INSERT INTO invoices (member_id, total_amount, status, created_at) VALUES ($1, 0, $2, NOW()) RETURNING *',
-                [memberId, 'unpaid']
-              );
-              const invoiceId = invoiceResult.rows[0].invoice_id;
-              invoiceIds.push(invoiceId);
-          
-              const generateInvoiceID = (id) => {
-                const now = new Date();
-                const day = String(now.getDate()).padStart(2, '0'); 
-                const month = String(now.getMonth() + 1).padStart(2, '0'); 
-                const year = String(now.getFullYear()).slice(-2); 
-          
-                return `INV${day}${month}${year}${id}`;
-              };
-          
-              const uniqueIdInv = generateInvoiceID(invoiceId);
-          
-              await pool.query(
-                'UPDATE invoices SET unique_id = $1 WHERE invoice_id = $2',
-                [uniqueIdInv, invoiceId]
-              );
-          
-              let totalAmount = 0;
-          
-              // Tambahkan fee untuk invoice ini
-              for (const fee of activeFees.rows) {
-                const feeRate = await pool.query(
-                  'SELECT amount FROM fee_rates WHERE fee_id = $1 AND effective_date <= $2 ORDER BY effective_date DESC LIMIT 1',
-                  [fee.fee_id, currentMonth]
-                );
-          
-                if (feeRate.rows.length > 0) {
-                  const amount = feeRate.rows[0].amount;
-                  totalAmount += amount;
-          
-                  await pool.query(
-                    'INSERT INTO member_fees (member_id, invoice_id, fee_id, due_date, amount_due, status) VALUES ($1, $2, $3, $4, $5, $6)',
-                    [memberId, invoiceId, fee.fee_id, currentMonth, amount, 'unpaid']
-                  );
-                }
-              }
-          
-              // Update total invoice setelah semua fee ditambahkan
-              await pool.query(
-                'UPDATE invoices SET total_amount = $1 WHERE invoice_id = $2',
-                [totalAmount, invoiceId]
-              );
-          
-              // Pindah ke bulan berikutnya
-              currentMonth.setMonth(currentMonth.getMonth() + 1);
-            }
-  
-          } else {
-           
-            const invoiceResult = await pool.query(
-              'INSERT INTO invoices (member_id, total_amount, status, created_at) VALUES ($1,$2, $3, NOW()) RETURNING *',
-              [memberId, amount, 'unpaid']
-            );
-
-            const invoiceId = invoiceResult.rows[0].invoice_id;
-            invoiceIds.push(invoiceId);
-        
-            const generateInvoiceID = (id) => {
-              const now = new Date();
-              const day = String(now.getDate()).padStart(2, '0'); 
-              const month = String(now.getMonth() + 1).padStart(2, '0'); 
-              const year = String(now.getFullYear()).slice(-2); 
-        
-              return `INV${day}${month}${year}${id}`;
-            };
-        
-            const uniqueIdInv = generateInvoiceID(invoiceId);
-        
-            await pool.query(
-              'UPDATE invoices SET unique_id = $1 WHERE invoice_id = $2',
-              [uniqueIdInv, invoiceId]
-            );
-        
-           // let totalAmount = 0;
-
-            await pool.query(
-              'INSERT INTO member_fees (member_id, invoice_id, fee_id, due_date, amount_due, status) VALUES ($1, $2, $3, $4, $5, $6)',
-              [memberId, invoiceId, feeId, effective_date, amount, 'unpaid']
-            );
-          }
-         
+        const authHeader = req.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return errorResponse(
+            'Unauthorized',
+            'Token not provided',
+            401
+          );  
         }
-        
-        await pool.query('COMMIT');
+
+        const token = authHeader.split(' ')[1];
+        let decodedToken;
+
+        try {
+          decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (error) {
+          return errorResponse(
+            'Unauthorized',
+            'Invalid or expired token',
+            401
+          );
+        }
+    
+      const { tenantId } = decodedToken;
+      await pool.query('BEGIN'); 
+
+      const { feeName, feeType, feeStatus, effective_date, amount, unitStatus} = await req.json();
+
+      if (!feeName || !feeType || !feeStatus || !effective_date) {
+          return errorResponse('Bad Request', 'Missing required fields', 400);
+      }
+
+      // console.log("Processing fee with details:", {
+      //     feeName,
+      //     feeType,
+      //     feeStatus,
+      //     effective_date
+      // });
+
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      const dueDate = firstDayOfMonth.toISOString().slice(0, 10); // YYYY-MM-DD
+
+      const feeResult = await pool.query(
+          'INSERT INTO fees (fee_name, is_recurring, status, tenant_id, unit_status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+          [feeName, feeType, feeStatus, tenantId, unitStatus]
+      );
+
+      const feeId = feeResult.rows[0].fee_id;
+
+      const feeRatestResult = await pool.query(
+          'INSERT INTO fee_rates (effective_date, amount, fee_id) VALUES ($1, $2, $3) RETURNING *',
+          [effective_date, amount, feeId]
+      );
+
+      const unitCheck = await pool.query(
+        `SELECT COUNT(*) AS unit_count FROM units WHERE tenant_id = $1`,
+        [tenantId]
+      );
       
-        return new Response(
-            JSON.stringify({
-                message: 'Berhasil',
-                fee: feeResult.rows,
-                feeRates: feeRatestResult.rows,
-            }),
-            { status: 201 }
+      const unitCount = parseInt(unitCheck.rows[0].unit_count, 10);
+      
+      if (unitCount > 0) {
+        const unitResult = await pool.query(
+          `SELECT
+              u.unit_id,
+              u.house_number,
+              us.status_history_id,
+              us.status_date,
+              us.status
+            FROM public.units u
+            LEFT JOIN public.unit_status_history us 
+              ON u.unit_id = us.unit_id
+            WHERE u.tenant_id = $1
+            AND us.status = $2`,
+          [tenantId, unitStatus]
         );
+      
+        // Asumsi mengambil member_id pertama yang ditemukan
+        const unitId = unitResult.rows[0].unit_id;
+      
+        // Ambil daftar iuran aktif yang sesuai dengan unit_status
+        const activeFees = await pool.query(
+          'SELECT fee_id FROM fees WHERE tenant_id = $1 AND status = $2 AND unit_status = $3 AND fee_id = $4',
+          [tenantId, 'active', unitStatus, feeId] // Filter berdasarkan unitStatus
+        );
+      
+        const oldestFeeDate = await pool.query(
+          'SELECT MIN(effective_date) as start_date FROM fee_rates WHERE fee_id = $1',
+          [feeId]
+        );
+      
+        const firstFeeDate = oldestFeeDate.rows[0].start_date ? new Date(oldestFeeDate.rows[0].start_date) : null;
+        const today = new Date();
+      
+        let currentMonth = new Date(firstFeeDate);
+
+        if(feeType === 'true') {
+  
+         // console.log("feeType bulanan");
+
+          while (currentMonth <= today) {
+            let totalAmount = 0;
+      
+            for (const fee of activeFees.rows) {
+              const feeRate = await pool.query(
+                'SELECT amount FROM fee_rates WHERE fee_id = $1 AND effective_date <= $2 ORDER BY effective_date DESC LIMIT 1',
+                [fee.fee_id, currentMonth]
+              );
+        
+              if (feeRate.rows.length > 0) {
+                const amount = feeRate.rows[0].amount;
+                totalAmount += amount;
+        
+                await pool.query(
+                  'INSERT INTO unit_fees (unit_id, fee_id, due_date, amount_due, status) VALUES ($1, $2, $3, $4, $5)',
+                  [unitId, fee.fee_id, currentMonth, amount, 'unpaid']
+                );
+              }
+            }
+        
+            // Pindah ke bulan berikutnya
+            currentMonth.setMonth(currentMonth.getMonth() + 1);
+          }
+
+        } else {
+
+          //console.log("feeType tidak bulanan");
+          await pool.query(
+            'INSERT INTO unit_fees (unit_id, fee_id, due_date, amount_due, status) VALUES ($1, $2, $3, $4, $5)',
+            [unitId, feeId, effective_date, amount, 'unpaid']
+          );
+          
+        }
+      
+      }
+      
+      await pool.query('COMMIT');
+    
+      return successResponse(
+          feeResult.rows,
+          'Data Successfully created',
+          201
+      );
 
     } catch (error) {
-        await pool.query('ROLLBACK');
-    
-        console.error('Gagal', error);
-        return new Response(
-            JSON.stringify({ message: 'Internal Server Error', error: error.message }),
-            { status: error.message === 'Unauthorized' ? 401 : 500 }
-        );
+      await pool.query('ROLLBACK');
+  
+      console.error('Gagal', error);
+      return errorResponse(
+          'Internal Server Error',
+          'An error occurred while creating data',
+          500
+      );
     }
 }
 
@@ -187,20 +167,32 @@ export async function GET(req) {
     try {
       // Middleware untuk validasi API key (opsional, jika Anda menggunakan API key)
       apiKeyMiddleware(req);
-      const tenantId = req.headers.get('x-tenant-id');
-      
+
       // Ambil token dari header Authorization
       const authHeader = req.headers.get('authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return new Response(
-          JSON.stringify({
-            status: 'fail',
-            message: 'Unauthorized',
-            data: null,
-          }),
-          { status: 401 }
+        return errorResponse(
+          'Unauthorized',
+          'Token not provided',
+          401
+        );  
+      }
+
+      const token = authHeader.split(' ')[1];
+      let decodedToken;
+
+      try {
+        decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (error) {
+        return errorResponse(
+          'Unauthorized',
+          'Invalid or expired token',
+          401
         );
       }
+        
+      const { tenantId } = decodedToken;
+      
 
       const query = `
         WITH latest_amount AS (
@@ -208,7 +200,7 @@ export async function GET(req) {
               f.fee_id,
               f.fee_name,
               f.status,
-              f.member_status,
+              f.unit_status,
               f.is_recurring,
               fr.rate_id,
               fr.effective_date::TEXT AS effective_date,
@@ -236,40 +228,27 @@ export async function GET(req) {
           FROM latest_amount ls
           LEFT JOIN public.fee_rates h 
             ON ls.fee_id = h.fee_id
-          GROUP BY ls.fee_id, ls.fee_name, ls.is_recurring, ls.status, ls.member_status, ls.rate_id, ls.effective_date,ls.amount
+          GROUP BY ls.fee_id, ls.fee_name, ls.is_recurring, ls.status, ls.unit_status, ls.rate_id, ls.effective_date, ls.amount
           ORDER BY ls.fee_id;
       `;
       const result = await pool.query(query,[tenantId]);
   
       if (result.rows.length === 0) {
-        return new Response(
-            JSON.stringify({
-                status: 'fail',
-                message: 'Data not found',
-                data: [],
-            }),
-            { status: 200 }
-        );
+        return successResponse([], 'No data found', 200);
       }
 
-      return new Response(
-        JSON.stringify({
-          status: 'success',
-          message: 'Data retrieved successfully',
-          data: result.rows,
-        }),
-        { status: 200 }
+     return successResponse(
+        result.rows,
+        'Data successfully retrieved',
+        200
       );
       
     } catch (error) {
       console.error('Error fetching Fees:', error);
-      return new Response(
-        JSON.stringify({
-            status: 'error',
-            message: 'Internal Server Error',
-            data: [],
-          }),
-        { status: 500 }
+      return errorResponse(
+        'Internal Server Error',
+        'An error occurred while fetching data',
+        500
       );
     }
 }
@@ -277,13 +256,37 @@ export async function GET(req) {
 export async function PUT(req) {
   try {
       apiKeyMiddleware(req);
+
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return errorResponse(
+          'Unauthorized',
+          'Token not provided',
+          401
+        );  
+      }
+
+      const token = authHeader.split(' ')[1];
+      let decodedToken;
+
+      try {
+        decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (error) {
+        return errorResponse(
+          'Unauthorized',
+          'Invalid or expired token',
+          401
+        );
+      }
+  
+      const { tenantId } = decodedToken;
       await pool.query('BEGIN'); 
-      const { feeName, feeType, feeStatus, effective_date, amount, feeID, member_status } = await req.json();
-      // console.log(feeName, feeType, feeStatus, effective_date, amount, feeID)
+
+      const { feeName, feeType, feeStatus, effective_date, amount, unitStatus, feeID } = await req.json();
 
       const feeResult = await pool.query(
-          'UPDATE fees SET fee_name = $1, is_recurring = $2, status = $3, member_status = $5 WHERE fee_id = $4 RETURNING *',
-          [feeName, feeType, feeStatus, feeID, member_status]
+          'UPDATE fees SET fee_name = $1, is_recurring = $2, status = $3, unit_status = $4 WHERE fee_id = $5 RETURNING *',
+          [feeName, feeType, feeStatus, unitStatus, feeID]
       );
 
       if (feeResult.rowCount === 0) {
@@ -293,57 +296,23 @@ export async function PUT(req) {
       const feeId = feeResult.rows[0].fee_id;
 
       //untuk bulanan
-
       const updateFeesAndInvoices = async (amount, effective_date, feeId) => {
         try {
-          // Update member_fees untuk due_date >= effectiveDate
-          const updateMemberFeesQuery = await pool.query(
-            `UPDATE member_fees 
+          // Update unit_fees untuk due_date >= effectiveDate
+          const updateUnitFeesQuery = await pool.query(
+            `UPDATE unit_fees 
              SET amount_due = $1 
              WHERE due_date >= $2 
              AND status = 'unpaid' 
              AND fee_id = $3 
-             RETURNING invoice_id`,
+             RETURNING unit_fee_id`,
             [amount, effective_date, feeId]
           );
       
-          const invoiceIds = updateMemberFeesQuery.rows.map(row => row.invoice_id);
-      
-          if (invoiceIds.length > 0) {
-            await pool.query(
-              `UPDATE invoices 
-               SET total_amount = $1 
-               WHERE invoice_id = ANY($2)`,
-              [amount, invoiceIds]
-            );
-          }
-      
-          // Ambil invoice_id untuk member_fees yang statusnya "paid"
-          const paidFeesQuery = await pool.query(
-            `SELECT invoice_id, amount_due, due_date 
-             FROM member_fees 
-             WHERE due_date >= $1 
-             AND status = 'paid' 
-             AND fee_id = $2`,
-            [effective_date, feeId]
-          );
-      
-          // Jika ada yang "paid", masukkan ke invoice_adjustments
-          if (paidFeesQuery.rows.length > 0) {
-            const values = paidFeesQuery.rows.map(row => `(${row.invoice_id}, ${row.amount_due}, '${row.due_date}')`).join(",");
-      
-            await pool.query(
-              `INSERT INTO invoice_adjustments (invoice_id, adjustment_amount, adjustment_date) 
-              VALUES ${values}`
-            );
-          }
-      
-          //console.log("Update selesai!");
         } catch (error) {
           console.error("Terjadi kesalahan:", error);
         }
       };
-
       
       // Mengecek apakah ada entri dengan kombinasi fee_id dan effective_month
       const existingMonth = await pool.query(
@@ -375,7 +344,6 @@ export async function PUT(req) {
           await updateFeesAndInvoices(amount, effective_date, feeId);
         }
       
-
       }
       // Kondisi 2: Jika effective_month ada dan amount tidak ada, lakukan update amount
       else if (existingMonth.rows.length > 0 && existingAmount.rows.length === 0) {
@@ -428,90 +396,72 @@ export async function PUT(req) {
 
         await updateFeesAndInvoices(amount, effective_date, feeId);
 
-
-        // // Update member_fees untuk due_date >= effectiveDate
-        // const updateMemberFeesQuery = await pool.query(
-        //   'UPDATE member_fees SET amount_due = $1 WHERE due_date >= $2 AND status = $3 AND fee_id = $4 RETURNING invoice_id',
-        //   [amount, effective_date, 'unpaid' , feeId]
-        // );
-
-        // // console.log(effective_date)
-        // // console.log(amount)
-        // // console.log(feeId)
-
-        // if (updateMemberFeesQuery.rows.length === 0) {
-        //  // console.log("Tidak ada data yang diperbarui di member_fees.");
-        // }
-
-        //  // Ambil semua invoice_id yang terkait
-        // const invoiceIds = updateMemberFeesQuery.rows.map(row => row.invoice_id);
-      
-        // if(invoiceIds.length > 0) {
-        //   const updateInvoices = await pool.query(
-        //     'UPDATE invoices SET total_amount  = $1 WHERE invoice_id = ANY($2)',
-        //     [amount, invoiceIds]
-        //   );
-        // }
-
-        // // Ambil invoice_id untuk member_fees yang statusnya "paid"
-        // const paidFeesQuery = await pool.query(
-        //   `SELECT invoice_id, amount_due, due_date 
-        //    FROM member_fees 
-        //    WHERE due_date >= $1 
-        //    AND status = 'paid' 
-        //    AND fee_id = $2`,
-        //   [effective_date, feeId]
-        // );
-
-        // // Jika ada yang "paid", masukkan ke invoice_adjustments
-        // if (paidFeesQuery.rows.length > 0) {
-        //   const adjustments = paidFeesQuery.rows.map(row => `(${row.invoice_id}, ${row.amount_due}, '${row.due_date}')`).join(",");
-
-        //   const insertAdjustments = await pool.query(
-        //     `INSERT INTO invoice_adjustments (invoice_id, adjustment_amount, adjustment_date) 
-        //     VALUES ${adjustments}`
-        //   );
-
-        //   //console.log(`Berhasil menambahkan ${insertAdjustments.rowCount} data ke invoice_adjustments.`);
-        // }
-
         
       }
 
       await pool.query('COMMIT');
-      return new Response(
-          JSON.stringify({
-              status: 201,
-              message: 'Edit data berhasil',
-              data: feeResult.rows,
-          }),
-          { status: 201 }
+      return successResponse(
+          feeResult.rows,
+          'Data Successfully updated',
+          200
       );
   } catch (error) {
       await pool.query('ROLLBACK');
       console.error('Kesalahan edit data:', error);
-      return new Response(
-          JSON.stringify({ message: 'Internal Server Error', error: error.message }),
-          { status: error.message === 'Unauthorized' ? 401 : 500 }
+      return errorResponse(
+          'Internal Server Error',
+          'An error occurred while updating data',
+          500
       );
   }
 }
-
 
 export async function DELETE(req) {
   try {
       apiKeyMiddleware(req);
       await pool.query('BEGIN'); 
-      const {feeId } = await req.json();
+
+      const authHeader = req.headers.get('authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return errorResponse(
+          'Unauthorized',
+          'Token not provided',
+          401
+        );  
+      }
+
+      const token = authHeader.split(' ')[1];
+      let decodedToken;
+
+      try {
+        decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (error) {
+        return errorResponse(
+          'Unauthorized',
+          'Invalid or expired token',
+          401
+        );
+      }
+  
+      const { tenantId } = decodedToken;
+      const { feeId } = await req.json();
     
       if (!feeId) {
-        return new Response(JSON.stringify({ message: "ID wajib diisi" }), { status: 400 });
+        return errorResponse(
+          'Bad Request',
+          'feeId is required',
+          400
+        );    
       }
 
       // Cek apakah fee_id ada di database
       const checkFee = await pool.query("SELECT * FROM fees WHERE fee_id = $1", [feeId]);
       if (checkFee.rows.length === 0) {
-        return new Response(JSON.stringify({ message: "Fee tidak ditemukan" }), { status: 404 });
+        return successResponse(
+          null,
+          'Fee not found',
+          404
+        );  
       }
 
        // Cek apakah fee masih memiliki relasi di tabel lain (misalnya tbl_fee_rates)
@@ -524,20 +474,18 @@ export async function DELETE(req) {
       await pool.query("DELETE FROM fees WHERE fee_id = $1", [feeId]);
 
       await pool.query('COMMIT');
-      return new Response(
-          JSON.stringify({
-              status: 200,
-              message: 'Hapus data berhasil',
-              //data: feeResult.rows,
-          }),
-          { status: 200 }
+      return successResponse(
+          null,
+          'Data Successfully deleted',
+          200
       );
   } catch (error) {
       await pool.query('ROLLBACK');
       console.error('Kesalahan Hapus  data:', error);
-      return new Response(
-          JSON.stringify({ message: 'Internal Server Error', error: error.message }),
-          { status: error.message === 'Unauthorized' ? 401 : 500 }
+      return errorResponse(
+          'Internal Server Error',
+          'An error occurred while deleting data',
+          500
       );
   }
 }
